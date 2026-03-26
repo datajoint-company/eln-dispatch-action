@@ -1,0 +1,59 @@
+name: 'ELN Image Tag Update'
+description: 'Dispatch an ELN image tag update to dj-gitops, creating an auto-PR'
+inputs:
+  tenant_name:
+    description: 'ELN tenant overlay directory name (e.g., org_project)'
+    required: true
+  image_tag:
+    description: 'Image tag to deploy (e.g., 1.2.0-sha-abc123)'
+    required: true
+  environment:
+    description: 'Target environment: qa or prod'
+    required: true
+    default: 'prod'
+  token:
+    description: 'GitHub token with repo scope on datajoint-company/dj-gitops'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate inputs
+      shell: bash
+      env:
+        TENANT_NAME: ${{ inputs.tenant_name }}
+        IMAGE_TAG: ${{ inputs.image_tag }}
+        ENVIRONMENT: ${{ inputs.environment }}
+      run: |
+        errors=0
+        if ! echo "$TENANT_NAME" | grep -qE '^[a-zA-Z0-9_-]+$'; then
+          echo "::error::tenant_name must match [a-zA-Z0-9_-]+"
+          errors=$((errors + 1))
+        fi
+        if ! echo "$IMAGE_TAG" | grep -qE '^[a-zA-Z0-9._-]+$'; then
+          echo "::error::image_tag must match [a-zA-Z0-9._-]+"
+          errors=$((errors + 1))
+        fi
+        if [ "$ENVIRONMENT" != "qa" ] && [ "$ENVIRONMENT" != "prod" ]; then
+          echo "::error::environment must be 'qa' or 'prod'"
+          errors=$((errors + 1))
+        fi
+        [ "$errors" -gt 0 ] && exit 1 || true
+    - name: Dispatch ELN image update
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        TENANT_NAME: ${{ inputs.tenant_name }}
+        IMAGE_TAG: ${{ inputs.image_tag }}
+        ENVIRONMENT: ${{ inputs.environment }}
+      run: |
+        jq -n \
+          --arg name "$TENANT_NAME" \
+          --arg tag "$IMAGE_TAG" \
+          --arg env "$ENVIRONMENT" \
+          '{
+            event_type: "eln-image-update",
+            client_payload: {
+              services: [{name: $name, tag: $tag, environment: $env, type: "eln"}]
+            }
+          }' | gh api repos/datajoint-company/dj-gitops/dispatches --method POST --input -
+        echo "Dispatched ELN image update: ${TENANT_NAME}:${IMAGE_TAG} -> ${ENVIRONMENT}"
