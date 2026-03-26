@@ -2,9 +2,29 @@
 
 Composite GitHub Action that triggers an ELN image tag update on [dj-gitops](https://github.com/datajoint-company/dj-gitops). After a dashboard image is built and pushed, this action dispatches a `repository_dispatch` event that creates an auto-PR to update the tenant's kustomize overlay `newTag`. Merging that PR triggers an ArgoCD sync to deploy the new image.
 
-## Prerequisites
+## Setup
 
-A GitHub PAT (or fine-grained token) with `repo` scope on `datajoint-company/dj-gitops`, stored as a repository or organization secret (e.g., `GITOPS_DISPATCH_TOKEN`).
+### 1. Create a GitHub PAT
+
+Create a [fine-grained personal access token](https://github.com/settings/tokens?type=beta) (or classic PAT) with `repo` scope on `datajoint-company/dj-gitops`. A single token is used for all dashboard repos.
+
+### 2. Add the token as an organization secret
+
+Add the PAT as an [organization secret](https://docs.github.com/en/actions/security-for-github-actions/security-guides/using-secrets-in-github-actions#creating-secrets-for-an-organization) named `GITOPS_DISPATCH_TOKEN` in each GitHub org that has dashboard repos. This makes the secret available to all dashboard repos in that org without per-repo configuration.
+
+### 3. Add the action step to your build workflow
+
+In your dashboard repo's `eln-build-publish.yaml` (or equivalent), add the dispatch step **after** the image push step. See [Usage](#usage) below.
+
+## Migrating existing dashboard repos
+
+For repos that already have `eln-build-publish.yaml`:
+
+1. Add `GITOPS_DISPATCH_TOKEN` as an org secret (once per GitHub org)
+2. Add the action step at the end of the build job
+3. Remove any manual deployment steps (the old `deploy-eln` workflow in dj-gitops no longer exists)
+
+For the template repo used to create new dashboard projects, update the template's workflow so all new repos include the dispatch step automatically.
 
 ## Usage
 
